@@ -1,4 +1,6 @@
 {
-    "contents": "Tartalomjegyzék",
-    "showall": "Mind látszik"
+    "contents": "Tartalom",
+    "hiddenfromstudents": "Tanulók elől rejtve",
+    "overriddennotice": "A tevékenységgel kapcsolatos végső pontja kézzel módosítva lett.",
+    "showall": "Minden {{$a}} megjelenítése"
 }

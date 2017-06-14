@@ -23,24 +23,8 @@ angular.module('mm.addons.mod_folder')
  * @todo Adding a new file in a folder updates the revision of all the files, so they're all shown as outdated.
  *       To ignore revision in folders we'll have to modify $mmCoursePrefetchDelegate, mm-file and $mmFilepool.
  */
-.factory('$mmaModFolder', function($mmSite, $mmCourse, $q, $mmFilepool, mmaModFolderComponent) {
+.factory('$mmaModFolder', function($mmSite, $mmCourse, $q, $mmSitesManager, $mmUtil) {
     var self = {};
-
-    /**
-     * Download all the content.
-     *
-     * @module mm.addons.mod_folder
-     * @ngdoc method
-     * @name $mmaModFolder#downloadAllContent
-     * @param {Object} module The module object.
-     * @return {Promise}      Promise resolved when all content is downloaded. Data returned is not reliable.
-     */
-    self.downloadAllContent = function(module) {
-        var files = self.getDownloadableFiles(module),
-            revision = $mmFilepool.getRevisionFromFileList(module.contents),
-            timemod = $mmFilepool.getTimemodifiedFromFileList(module.contents);
-        return $mmFilepool.downloadPackage($mmSite.getId(), files, mmaModFolderComponent, module.id, revision, timemod);
-    };
 
     /**
      * Format folder contents, creating directory structure.
@@ -113,37 +97,111 @@ angular.module('mm.addons.mod_folder')
     };
 
     /**
-     * Returns a list of files that can be downloaded.
+     * Returns whether or not getFolder WS available or not.
      *
      * @module mm.addons.mod_folder
      * @ngdoc method
-     * @name $mmaModFolder#getDownloadableFiles
-     * @param {Object} module The module object returned by WS.
-     * @return {Object[]}     List of files.
+     * @name $mmaModFolder#isGetFolderWSAvailable
+     * @return {Boolean}
      */
-    self.getDownloadableFiles = function(module) {
-        var files = [];
-
-        angular.forEach(module.contents, function(content) {
-            if (self.isFileDownloadable(content)) {
-                files.push(content);
-            }
-        });
-
-        return files;
+    self.isGetFolderWSAvailable = function() {
+        return $mmSite.wsAvailable('mod_folder_get_folders_by_courses');
     };
 
     /**
-     * Check if a file is downloadable. The file param must have a 'type' attribute like in core_course_get_contents response.
+     * Get a folder.
+     *
+     * @param  {String} siteId    Site ID.
+     * @param  {Number} courseId  Course ID.
+     * @param  {String} key       Name of the property to check.
+     * @param  {Mixed}  value     Value to search.
+     * @return {Promise}          Promise resolved when the book is retrieved.
+     */
+    function getFolder(siteId, courseId, key, value) {
+        return $mmSitesManager.getSite(siteId).then(function(site) {
+            var params = {
+                    courseids: [courseId]
+                },
+                preSets = {
+                    cacheKey: getFolderCacheKey(courseId)
+                };
+
+            return site.read('mod_folder_get_folders_by_courses', params, preSets).then(function(response) {
+                if (response && response.folders) {
+                    var currentFolder;
+                    angular.forEach(response.folders, function(folder) {
+                        if (!currentFolder && folder[key] == value) {
+                            currentFolder = folder;
+                        }
+                    });
+                    if (currentFolder) {
+                        return currentFolder;
+                    }
+                }
+                return $q.reject();
+            });
+        });
+    }
+
+    /**
+     * Get a folder by course module ID.
      *
      * @module mm.addons.mod_folder
      * @ngdoc method
-     * @name $mmaModFolder#isFileDownloadable
-     * @param {Object} file File to check.
-     * @return {Boolean}    True if downloadable, false otherwise.
+     * @name $mmaModFolder#getFolder
+     * @param {Number} courseId Course ID.
+     * @param {Number} cmId     Course module ID.
+     * @param {String} [siteId] Site ID. If not defined, current site.
+     * @return {Promise}        Promise resolved when the book is retrieved.
      */
-    self.isFileDownloadable = function(file) {
-        return file.type === 'file';
+    self.getFolder = function(courseId, cmId, siteId) {
+        return getFolder(siteId, courseId, 'coursemodule', cmId);
+    };
+
+    /**
+     * Get cache key for folder data WS calls.
+     *
+     * @param {Number} courseId Course ID.
+     * @return {String}         Cache key.
+     */
+    function getFolderCacheKey(courseId) {
+        return 'mmaModFolder:folder:' + courseId;
+    }
+
+    /**
+     * Invalidates folder data.
+     *
+     * @module mm.addons.mod_folder
+     * @ngdoc method
+     * @name $mmaModFolder#invalidateFolderData
+     * @param {Number} courseId Course ID.
+     * @param {String} [siteId] Site ID. If not defined, current site.
+     * @return {Promise}        Promise resolved when the data is invalidated.
+     */
+    self.invalidateFolderData = function(courseId, siteId) {
+        return $mmSitesManager.getSite(siteId).then(function(site) {
+            return site.invalidateWsCacheForKey(getFolderCacheKey(courseId));
+        });
+    };
+
+    /**
+     * Invalidate the prefetched content.
+     *
+     * @module mm.addons.mod_folder
+     * @ngdoc method
+     * @name $mmaModFolder#invalidateContent
+     * @param  {Number} moduleId The module ID.
+     * @param  {Number} courseId Course ID of the module.
+     * @param  {String} [siteId] Site ID. If not defined, current site.
+     * @return {Promise}
+     */
+    self.invalidateContent = function(moduleId, courseId, siteId) {
+        var promises = [];
+
+        promises.push(self.invalidateFolderData(courseId, siteId));
+        promises.push($mmCourse.invalidateModule(moduleId, siteId));
+
+        return $mmUtil.allPromises(promises);
     };
 
     /**
@@ -163,22 +221,6 @@ angular.module('mm.addons.mod_folder')
             return $mmSite.write('mod_folder_view_folder', params);
         }
         return $q.reject();
-    };
-
-    /**
-     * Prefetch the content.
-     *
-     * @module mm.addons.mod_folder
-     * @ngdoc method
-     * @name $mmaModFolder#prefetchContent
-     * @param {Object} module The module object.
-     * @return {Promise}      Promise resolved when all content is downloaded. Data returned is not reliable.
-     */
-    self.prefetchContent = function(module) {
-        var files = self.getDownloadableFiles(module),
-            revision = $mmFilepool.getRevisionFromFileList(module.contents),
-            timemod = $mmFilepool.getTimemodifiedFromFileList(module.contents);
-        return $mmFilepool.prefetchPackage($mmSite.getId(), files, mmaModFolderComponent, module.id, revision, timemod);
     };
 
     return self;

@@ -22,7 +22,7 @@ angular.module('mm.addons.remotestyles')
  * @name $mmaRemoteStyles
  */
 .factory('$mmaRemoteStyles', function($log, $q, $mmSite, $mmSitesManager, $mmFilepool, $http, $mmFS, mmaRemoteStylesComponent,
-            mmCoreNotDownloaded, $mmUtil, md5) {
+            mmCoreNotDownloaded, $mmUtil, md5, $mmText) {
 
     $log = $log.getInstance('$mmaRemoteStyles');
 
@@ -194,6 +194,35 @@ angular.module('mm.addons.remotestyles')
     };
 
     /**
+     * Load styles for a temporary site. These styles aren't prefetched.
+     *
+     * @module mm.addons.remotestyles
+     * @ngdoc method
+     * @name $mmaRemoteStyles#loadTmpStyles
+     * @param  {String} url URL to get the styles from.
+     * @return {Void}
+     */
+    self.loadTmpStyles = function(url) {
+        if (!url) {
+            return;
+        }
+
+        return $http.get(url).then(function(response) {
+            if (typeof response.data == 'string') {
+                var el = angular.element('<style id="mobilecssurl-tmpsite"></style>');
+                el.html(response.data);
+                angular.element(document.head).append(el);
+                remoteStylesEls.tmpsite = {
+                    element: el,
+                    hash: ''
+                };
+            } else {
+                return $q.reject();
+            }
+        });
+    };
+
+    /**
      * Preload the styles of the current site (stored in DB). Please do not use.
      *
      * @module mm.addons.remotestyles
@@ -272,7 +301,7 @@ angular.module('mm.addons.remotestyles')
             if (url.indexOf('http') == 0) {
                 promises.push($mmFilepool.downloadUrl(siteId, url, false, mmaRemoteStylesComponent, 2).then(function(fileUrl) {
                     if (fileUrl != url) {
-                        cssCode = cssCode.replace(new RegExp(url, 'g'), fileUrl);
+                        cssCode = cssCode.replace(new RegExp($mmText.escapeForRegex(url), 'g'), fileUrl);
                         updated = true;
                     }
                 }).catch(function(error) {
@@ -291,6 +320,18 @@ angular.module('mm.addons.remotestyles')
             return cssCode;
         });
     }
+
+    /**
+     * Unload styles for a temporary site.
+     *
+     * @module mm.addons.remotestyles
+     * @ngdoc method
+     * @name $mmaRemoteStyles#unloadTmpStyles
+     * @return {Void}
+     */
+    self.unloadTmpStyles = function() {
+        return self.removeSite('tmpsite');
+    };
 
     return self;
 });

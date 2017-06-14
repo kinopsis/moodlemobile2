@@ -1,3 +1,6 @@
 {
-    "browsemode": "预览模式"
+    "attachment": "附件发送",
+    "browsemode": "预览模式",
+    "casesensitive": "使用正则表达式",
+    "categories": "课程分类"
 }

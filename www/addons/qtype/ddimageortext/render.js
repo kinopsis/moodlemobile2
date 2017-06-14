@@ -35,6 +35,15 @@ angular.module('mm.addons.qtype_ddimageortext')
         this.proportion = 1;
         this.selected = null;
 
+        this.resizeFunction = function() {
+            instance.reposition_drags_for_question();
+        };
+
+        this.destroy = function() {
+            this.stop_polling();
+            ionic.off('resize', this.resizeFunction, window);
+        };
+
         this.initializer = function(question) {
             this.doc = this.doc_structure(question.slot);
 
@@ -70,9 +79,7 @@ angular.module('mm.addons.qtype_ddimageortext')
                 instance.poll_for_image_load();
             });
 
-            ionic.on('resize', function() {
-                instance.reposition_drags_for_question();
-            });
+            ionic.on('resize', this.resizeFunction, window);
         };
 
         this.poll_for_image_load = function () {
@@ -150,7 +157,7 @@ angular.module('mm.addons.qtype_ddimageortext')
                             }
                         }
                     }
-                    throw 'Prefix "' + prefix + '" not found in class names.';
+                    console.warn('Qtype ddimageortext: Prefix "' + prefix + '" not found in class names.');
                 },
                 clone_new_drag_item : function (draginstanceno, dragitemno) {
                     var drag, divdrag;
